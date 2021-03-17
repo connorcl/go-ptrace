@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/binary"
 	"fmt"
 	"reflect"
 	"strings"
@@ -143,4 +144,68 @@ func (p *PtraceProcess) DumpRegs() {
 		fmt.Printf("%-8s = 0x%012X\n",
 			typeOfT.Field(i).Name, f.Interface())
 	}
+}
+
+func (p *PtraceProcess) ReadWord(address uintptr) (uint32, error) {
+	word := make([]byte, 4)
+	_, err := unix.PtracePeekData(p.Pid, address, word)
+	return binary.LittleEndian.Uint32(word), err
+}
+
+func (p *PtraceProcess) WriteWord(address uintptr, value uint32) error {
+	data := make([]byte, 4)
+	binary.LittleEndian.PutUint32(data, value)
+	_, err := unix.PtracePokeData(p.Pid, address, data)
+	return err
+}
+
+func (p *PtraceProcess) ReadBytes(address uintptr, size uint) ([]byte, error) {
+	buf := make([]byte, size)
+	localVec := []unix.Iovec{{
+		Base: &buf[0],
+		Len:  uint64(size),
+	}}
+	remoteVec := []unix.RemoteIovec{{
+		Base: address,
+		Len:  int(size),
+	}}
+	_, err := unix.ProcessVMReadv(p.Pid, localVec, remoteVec, 0)
+	return buf, err
+}
+
+func (p *PtraceProcess) WriteBytes(address uintptr, data []byte) error {
+	size := len(data)
+	localVec := []unix.Iovec{{
+		Base: &data[0],
+		Len:  uint64(size),
+	}}
+	remoteVec := []unix.RemoteIovec{{
+		Base: address,
+		Len:  size,
+	}}
+	_, err := unix.ProcessVMWritev(p.Pid, localVec, remoteVec, 0)
+	return err
+}
+
+func (p *PtraceProcess) ReadCString(address uintptr) (string, error) {
+	var buf []byte
+	var count uint = 0
+	var l uint = 4
+	for {
+		word, err := p.ReadBytes(address+uintptr(count*l), l)
+		if err != nil {
+			return "", err
+		}
+		count++
+		for _, b := range word {
+			buf = append(buf, b)
+			if b == 0 {
+				return string(buf), nil
+			}
+		}
+	}
+}
+
+func (p *PtraceProcess) ReadMappings() []MemoryMapping {
+	return ReadProcessMappings(p.Pid)
 }
