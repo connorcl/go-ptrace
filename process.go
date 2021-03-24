@@ -14,6 +14,7 @@ type PtraceProcess struct {
 	Pid        int
 	IsAttached bool
 	IsThread   bool
+	Breakpoints map[uintptr]Breakpoint
 }
 
 func makePtraceProcess(pid int, isAttached bool, isThread bool) (PtraceProcess, error) {
@@ -27,6 +28,7 @@ func makePtraceProcess(pid int, isAttached bool, isThread bool) (PtraceProcess, 
 		Pid:        pid,
 		IsAttached: true,
 		IsThread:   isThread,
+		Breakpoints: make(map[uintptr]Breakpoint),
 	}
 	// return process struct and error
 	return process, err
@@ -208,4 +210,27 @@ func (p *PtraceProcess) ReadCString(address uintptr) (string, error) {
 
 func (p *PtraceProcess) ReadMappings() []MemoryMapping {
 	return ReadProcessMappings(p.Pid)
+}
+
+func (p *PtraceProcess) FindBreakpoint(address uintptr) (Breakpoint, bool) {
+	b, ok := p.Breakpoints[address]
+	return b, ok
+}
+
+func (p *PtraceProcess) CreateBreakpoint(address uintptr) {
+	_, ok := p.FindBreakpoint(address)
+	if !ok {
+		fmt.Println("Process: Setting breakpoint...")
+		b := CreateBreakpoint(address)
+		b.Install(p)
+		p.Breakpoints[address] = b
+	}
+}
+
+func (p* PtraceProcess) RemoveBreakpoint(address uintptr, setIp bool) {
+	b, ok := p.FindBreakpoint(address)
+	if ok {
+		b.Deinstall(p, setIp)
+		delete(p.Breakpoints, b.Address)
+	}
 }
