@@ -3,15 +3,15 @@ package main
 import "fmt"
 
 type Breakpoint struct {
-	Installed bool
-	Address uintptr
-	SavedBytes uint32
+	Installed  bool
+	Address    uintptr
+	SavedBytes uint64
 }
 
 func CreateBreakpoint(address uintptr) Breakpoint {
 	return Breakpoint{
-		Installed: false,
-		Address:   address,
+		Installed:  false,
+		Address:    address,
 		SavedBytes: 0,
 	}
 }
@@ -23,7 +23,7 @@ func (b *Breakpoint) Install(p *PtraceProcess) {
 		// save old instruction bytes
 		b.SavedBytes = word
 		// install INT3 instruction(s)
-		err = p.WriteWord(b.Address, 0xCCCCCCCC)
+		err = p.WriteWord(b.Address, 0xCCCCCCCCCCCCCCCC)
 		if err != nil {
 			fmt.Printf("Error writing memory when installing breakpoint: %s\n", err)
 		}

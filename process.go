@@ -10,10 +10,12 @@ import (
 	"golang.org/x/sys/unix"
 )
 
+const WordSize = 8
+
 type PtraceProcess struct {
-	Pid        int
-	IsAttached bool
-	IsThread   bool
+	Pid         int
+	IsAttached  bool
+	IsThread    bool
 	Breakpoints map[uintptr]Breakpoint
 }
 
@@ -25,9 +27,9 @@ func makePtraceProcess(pid int, isAttached bool, isThread bool) (PtraceProcess, 
 	}
 	// create process struct
 	process := PtraceProcess{
-		Pid:        pid,
-		IsAttached: true,
-		IsThread:   isThread,
+		Pid:         pid,
+		IsAttached:  true,
+		IsThread:    isThread,
 		Breakpoints: make(map[uintptr]Breakpoint),
 	}
 	// return process struct and error
@@ -101,7 +103,7 @@ func (p *PtraceProcess) SetInstrPointer(ip uint64) error {
 	if err != nil {
 		return err
 	}
-	regs.Rip = ip
+	regs.Rip = uint64(ip)
 	return p.SetRegs(&regs)
 }
 
@@ -148,20 +150,20 @@ func (p *PtraceProcess) DumpRegs() {
 	}
 }
 
-func (p *PtraceProcess) ReadWord(address uintptr) (uint32, error) {
-	word := make([]byte, 4)
+func (p *PtraceProcess) ReadWord(address uintptr) (uint64, error) {
+	word := make([]byte, 8)
 	_, err := unix.PtracePeekData(p.Pid, address, word)
-	return binary.LittleEndian.Uint32(word), err
+	return binary.LittleEndian.Uint64(word), err
 }
 
-func (p *PtraceProcess) WriteWord(address uintptr, value uint32) error {
-	data := make([]byte, 4)
-	binary.LittleEndian.PutUint32(data, value)
+func (p *PtraceProcess) WriteWord(address uintptr, value uint64) error {
+	data := make([]byte, 8)
+	binary.LittleEndian.PutUint64(data, value)
 	_, err := unix.PtracePokeData(p.Pid, address, data)
 	return err
 }
 
-func (p *PtraceProcess) ReadBytes(address uintptr, size uint) ([]byte, error) {
+func (p *PtraceProcess) ReadBytes(address uintptr, size int) ([]byte, error) {
 	buf := make([]byte, size)
 	localVec := []unix.Iovec{{
 		Base: &buf[0],
@@ -169,7 +171,7 @@ func (p *PtraceProcess) ReadBytes(address uintptr, size uint) ([]byte, error) {
 	}}
 	remoteVec := []unix.RemoteIovec{{
 		Base: address,
-		Len:  int(size),
+		Len:  size,
 	}}
 	_, err := unix.ProcessVMReadv(p.Pid, localVec, remoteVec, 0)
 	return buf, err
@@ -191,8 +193,8 @@ func (p *PtraceProcess) WriteBytes(address uintptr, data []byte) error {
 
 func (p *PtraceProcess) ReadCString(address uintptr) (string, error) {
 	var buf []byte
-	var count uint = 0
-	var l uint = 4
+	count := 0
+	l := 4
 	for {
 		word, err := p.ReadBytes(address+uintptr(count*l), l)
 		if err != nil {
@@ -227,10 +229,32 @@ func (p *PtraceProcess) CreateBreakpoint(address uintptr) {
 	}
 }
 
-func (p* PtraceProcess) RemoveBreakpoint(address uintptr, setIp bool) {
+func (p *PtraceProcess) RemoveBreakpoint(address uintptr, setIp bool) {
 	b, ok := p.FindBreakpoint(address)
 	if ok {
 		b.Deinstall(p, setIp)
 		delete(p.Breakpoints, b.Address)
 	}
+}
+
+func (p *PtraceProcess) FindStack() (MemoryMapping, bool) {
+	for _, m := range p.ReadMappings() {
+		if m.Pathname == "[stack]" {
+			return m, true
+		}
+	}
+	return MemoryMapping{}, false
+}
+
+func (p *PtraceProcess) DumpStack(len int) {
+	// get address of top of stack
+	sp, _ := p.GetStackPointer()
+	for i := 0; i < len; i++ {
+		word, _ := p.ReadWord(uintptr(sp) + uintptr(i*8))
+		fmt.Printf("%08X\n", word)
+	}
+}
+
+func (p *PtraceProcess) SetOptions(options int) error {
+	return unix.PtraceSetOptions(p.Pid, options)
 }

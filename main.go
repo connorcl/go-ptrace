@@ -21,17 +21,27 @@ func main() {
 
 	eip, _ := process.GetInstrPointer()
 	fmt.Printf("IP: 0x%X\n", eip)
-	predictedEip := eip  -4;
-	process.CreateBreakpoint(uintptr(predictedEip))
-	process.Cont()
+	process.SingleStep()
 	process.Wait()
 	eip, _ = process.GetInstrPointer()
 	fmt.Printf("IP: 0x%X\n", eip)
-	process.RemoveBreakpoint(uintptr(predictedEip), true)
-	eip, _ = process.GetInstrPointer()
-	fmt.Printf("IP: 0x%X\n", eip)
-	process.Cont()
-	process.Wait()
+
+	b := GetBacktrace(&process, 6, 25)
+	DumpBacktrace(&b)
+
+	//eip, _ := process.GetInstrPointer()
+	//fmt.Printf("IP: 0x%X\n", eip)
+	//predictedEip := eip  -4;
+	//process.CreateBreakpoint(uintptr(predictedEip))
+	//process.Cont()
+	//process.Wait()
+	//eip, _ = process.GetInstrPointer()
+	//fmt.Printf("IP: 0x%X\n", eip)
+	//process.RemoveBreakpoint(uintptr(predictedEip), true)
+	//eip, _ = process.GetInstrPointer()
+	//fmt.Printf("IP: 0x%X\n", eip)
+	//process.Cont()
+	//process.Wait()
 
 	//process.SingleStep()
 	//process.Wait()
