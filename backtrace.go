@@ -33,9 +33,9 @@ type Backtrace struct {
 	Truncated bool
 }
 
-func GetBacktrace(p *PtraceProcess, maxArgs int, maxDepth int) Backtrace {
+func (p *PtraceProcess) GetBacktrace(maxArgs int, maxDepth int) Backtrace {
 	backtrace := Backtrace{
-		Frames: make([]BacktraceFrame, 0),
+		Frames:    make([]BacktraceFrame, 0),
 		Truncated: false,
 	}
 
@@ -51,16 +51,16 @@ func GetBacktrace(p *PtraceProcess, maxArgs int, maxDepth int) Backtrace {
 
 		nextFp, err := p.ReadWord(uintptr(fp))
 		if err != nil {
-			fmt.Println("Next FP err!")
+			//fmt.Println("Next FP err!")
 			break
 		}
 
 		// Guess the number of function arguments
 		var nArgs int
-		fmt.Printf("Next FP: 0x%X\n", nextFp)
-		fmt.Printf("FP: 0x%X\n", fp)
+		//fmt.Printf("Next FP: 0x%X\n", nextFp)
+		//fmt.Printf("FP: 0x%X\n", fp)
 		nArgs = int(((nextFp - fp) / 8) - 2)
-		fmt.Printf("Args guess: %d\n", nArgs)
+		//fmt.Printf("Args guess: %d\n", nArgs)
 		if nArgs > maxArgs {
 			nArgs = maxArgs
 		}
@@ -69,26 +69,26 @@ func GetBacktrace(p *PtraceProcess, maxArgs int, maxDepth int) Backtrace {
 		backtrace.Frames = append(backtrace.Frames, frame)
 
 		nextIp, _ := p.ReadWord(uintptr(fp + 8))
-		fmt.Printf("Next IP: 0x%X\n", nextIp)
-		fmt.Printf("IP: 0x%X\n", ip)
+		//fmt.Printf("Next IP: 0x%X\n", nextIp)
+		//fmt.Printf("IP: 0x%X\n", ip)
 		ip = nextIp
 		if ip == math.MaxUint64 {
-			fmt.Println("Max int")
+			//fmt.Println("Max int")
 			break
 		}
 		fp = nextFp
 		depth += 1
-		fmt.Println("-----------------------")
+		//fmt.Println("-----------------------")
 	}
 	return backtrace
 }
 
-func DumpBacktraceFrame(f *BacktraceFrame) {
-	fmt.Printf("IP: 0x%X, Args: %v\n", f.Ip, f.Arguments)
+func (f BacktraceFrame) String() string {
+	return fmt.Sprintf("IP: 0x%X, Args: %v", f.Ip, f.Arguments)
 }
 
-func DumpBacktrace(b *Backtrace) {
+func (b *Backtrace) Dump() {
 	for _, f := range b.Frames {
-		DumpBacktraceFrame(&f)
+		fmt.Println(f)
 	}
 }

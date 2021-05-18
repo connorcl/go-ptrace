@@ -19,11 +19,14 @@ type MemoryMapping struct {
 	Pathname    string
 }
 
-func ReadProcessMappings(pid int) []MemoryMapping {
+func ReadProcessMappings(pid int) ([]MemoryMapping, error) {
 	maps := make([]MemoryMapping, 0)
 	path := fmt.Sprintf("/proc/%d/maps", pid)
 	mapsFile, err := os.Open(path)
-	catch(err)
+	if err != nil {
+		errMsg := fmt.Sprintf("Failed to open memory maps file: %s", err.Error())
+		return maps, MakeGenericError(errMsg)
+	}
 	defer mapsFile.Close()
 	re := getProcMapsRegexp()
 	scanner := bufio.NewScanner(mapsFile)
@@ -33,29 +36,19 @@ func ReadProcessMappings(pid int) []MemoryMapping {
 		mapping := parseMemoryMapping(parts)
 		maps = append(maps, mapping)
 	}
-	return maps
+	return maps, nil
 }
 
-func DumpMaps(maps []MemoryMapping) {
-	for _, m := range maps {
-		DumpMap(&m)
-	}
-}
-
-func DumpMap(m *MemoryMapping) {
-	fmt.Printf("0x%016X-0x%016X\n", m.Start, m.End)
-	fmt.Printf("\tPermissions: %s\n", m.Permissions)
-	fmt.Printf("\tOffset: 0x%X ", m.Offset)
-	fmt.Printf("Device: %02X:%02X ", m.MajorDevice, m.MinorDevice)
-	fmt.Printf("Inode: %d\n", m.Inode)
-	fmt.Printf("\tPath: %s", m.Pathname)
-	fmt.Printf("\n")
-}
-
-func catch(err error) {
-	if err != nil {
-		panic(err)
-	}
+func (m MemoryMapping) String() string {
+	return fmt.Sprintf("0x%016X-0x%016X %s %s", m.Start, m.End, m.Permissions, m.Pathname)
+	//result := fmt.Sprintf("0x%016X-0x%016X\n", m.Start, m.End)
+	//result += fmt.Sprintf("\tPermissions: %s\n", m.Permissions)
+	//result += fmt.Sprintf("\tOffset: 0x%X ", m.Offset)
+	//result += fmt.Sprintf("Device: %02X:%02X ", m.MajorDevice, m.MinorDevice)
+	//result += fmt.Sprintf("Inode: %d\n", m.Inode)
+	//result += fmt.Sprintf("\tPath: %s", m.Pathname)
+	//result += fmt.Sprintf("\n")
+	//return result
 }
 
 func getProcMapsRegexp() *regexp.Regexp {

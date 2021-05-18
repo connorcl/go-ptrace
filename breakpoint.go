@@ -16,33 +16,42 @@ func CreateBreakpoint(address uintptr) Breakpoint {
 	}
 }
 
-func (b *Breakpoint) Install(p *PtraceProcess) {
+func (b *Breakpoint) Install(p *PtraceProcess) error {
 	word, err := p.ReadWord(b.Address)
 	if err == nil {
-		fmt.Printf("Installing breakpoint at 0x%X\n", b.Address)
 		// save old instruction bytes
 		b.SavedBytes = word
 		// install INT3 instruction(s)
 		err = p.WriteWord(b.Address, 0xCCCCCCCCCCCCCCCC)
 		if err != nil {
-			fmt.Printf("Error writing memory when installing breakpoint: %s\n", err)
+			errMsg := fmt.Sprintf("Error installing breakpoint at address 0x%X: %s\n", b.Address, err.Error())
+			return MakeGenericError(errMsg)
 		}
 		b.Installed = true
+		return nil
 	} else {
-		fmt.Printf("Error reading memory when installing breakpoint: %s\n", err)
+		errMsg := fmt.Sprintf("Error reading bytes at address 0x%X: %s\n", b.Address, err.Error())
+		return MakeGenericError(errMsg)
 	}
 }
 
-func (b *Breakpoint) Deinstall(p *PtraceProcess, setIp bool) {
+func (b *Breakpoint) Deinstall(p *PtraceProcess, setIp bool) error {
 	if b.Installed {
 		b.Installed = false
-		fmt.Printf("Restoring bytes 0x%X to 0x%X\n", b.SavedBytes, b.Address)
 		err := p.WriteWord(b.Address, b.SavedBytes)
 		if err != nil {
-			fmt.Println(err)
+			errMsg := fmt.Sprintf("Error restoring saved bytes to address 0x%X: %s", b.Address, err.Error())
+			return MakeGenericError(errMsg)
 		}
 		if setIp {
-			p.SetInstrPointer(uint64(b.Address))
+			err = p.SetInstrPointer(uint64(b.Address))
+			if err != nil {
+				errMsg := fmt.Sprintf("Error restoring IP to 0x%X: %s", b.Address, err.Error())
+				return MakeGenericError(errMsg)
+			}
 		}
+		return nil
 	}
+	errMsg := "Breakpoint not installed!"
+	return MakeGenericError(errMsg)
 }
